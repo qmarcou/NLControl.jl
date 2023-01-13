@@ -1,31 +1,34 @@
 """
 Collection of functions implementing ODE dynamics using DifferentialEquations.jl style.
 """
-
-using DifferentialEquations
-using NumInt
 module ODESystems
-    export twoPopRSC!
+    #export twoPopRSC!
     # check this package out: https://juliapackages.com/p/parameterizedfunctions
-    using Parameters
+    using UnPack
+    using DifferentialEquations
+    using ..tumor_control: NumInt
+    import JuMP
+    using JuMP: Model,@variables,fix,@NLexpressions,@NLconstraint
+    using Ipopt
 
     """
     Wrapper class to interface tools from JuMP and SciML.
     """
-    struct DynamicalSystem()
+    struct DynamicalSystem
         p::NamedTuple
         # C_t::Function{t::Number}
-        dynamics::Function # f(u,p,t) -> du
-        stateVarNames::Dict
+        dynamics!::Function # f!(du,u,p,t) -> du
+        # stateVarNames::Dict
     end
 
     # TODO: check if this is actually creating performance gains
-    function generateInplaceDynamics(system::DynamicalSystem)->Function
-        function dynamics!(du,u,p,t)
-            du = system.dynamics(u,p,t)
+    function generateCopyDynamics(system::DynamicalSystem)::Function
+        function dynamics(du,u,p,t)
+            du = similar(u)
+            system.dynamics(du,u,p,t)
             return du
         end
-        return dynamics!
+        return dynamics
     end
 
     function solve_diffeq(system::DynamicalSystem,
@@ -34,7 +37,7 @@ module ODESystems
                             kwargs...)
         tspan = (0.0,sum(Δt))
         savetimes = append!([0.0],cumsum(Δt))
-        ode = DifferentialEquations.ODEProblem(system.dynamics,u0,tspan,system.p)
+        ode = DifferentialEquations.ODEProblem(system.dynamics!,u0,tspan,system.p)
         solution = ode.solve(prob; kwargs..., saveat=savetimes)
         return solution
     end
@@ -42,11 +45,11 @@ module ODESystems
     function solveEuler(system::DynamicalSystem,
                         u0::AbstractArray{Number},
                         Δt::AbstractArray{Number})        
-        return NumInt.eulerSolve(system.dynamics,system.p,u0,Δt)
+        return eulerSolve(system.dynamics!,system.p,u0,Δt)
     end
 
     function solveRK4()
-    
+    #TODO: implement RK4
     end
 
     """
@@ -75,9 +78,10 @@ module ODESystems
 
         # Create an expression containing the dynamics 
         # TODO: check that this works using an RK4 integration
+        copydyn = generateCopyDynamics(system)
         @NLexpressions(model,begin
             # du/dt
-            du[j = 1:n], system.dynamics(u[j],system.p,t[j])
+            du[j = 1:n], copydyn(u[j],system.p,t[j])
         end)
 
         # Add the dynamics constraint based on the integration scheme
@@ -107,7 +111,6 @@ module ODESystems
     end
 
     function fitBayes()
-    end
         
     end
 
@@ -138,7 +141,7 @@ module ODESystems
     function twoPopRSC!(du,u,p,t)
         s,r = u
         # Properly unpack parameters: https://stackoverflow.com/questions/44298860/julia-best-practice-to-unpack-parameters-inside-a-function
-        @unpack ρ,m,K,α,β,C_t = p
+        #@unpack ρ,m,K,α,β,C_t = p
 
         # Sensitive cells dynamics
         du[1] = s′ = ρ*s*(1-((s+m*r)/K)) - α*C_t(t)*s
@@ -146,7 +149,7 @@ module ODESystems
         du[2] = r′ = ρ*r*(1-((s+m*r)/K)) - β*r*s/K
     end
 
-    """
+#=     """
         constfunc_generator(c::Number)
     Generator to build one dimensionnal constant scalar function.
 
@@ -160,7 +163,7 @@ module ODESystems
 
     Can be used to easily solve a system containing a control term in a null control situation.
     """
-    nullfunc(t::Number) = 0.0
+    nullfunc(t::Number) = 0.0 =#
 
 
 end
