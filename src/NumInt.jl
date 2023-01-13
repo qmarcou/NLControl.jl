@@ -9,16 +9,16 @@ module NumInt
     export eulerSolve
 
     #function eulerStep!(u_next::Array{float64},u::Array{float64},du::Array{float64},Δx::Array{float64})
-    function eulerStep!(u_next::AbstractArray{Number},
-                        u::AbstractArray{Number},
-                        du::AbstractArray{Number},
-                        Δx::Number)
+    function eulerStep!(u_next::AbstractArray{T},
+                        u::AbstractArray{T},
+                        du::AbstractArray{T},
+                        Δx::Number) where T<: Number
         u_next .= u.+Δx.*du
     end
 
-    function eulerStep(u::AbstractArray{Number},
-                        du::AbstractArray{Number},
-                        Δx::Number)
+    function eulerStep(u::AbstractArray{T},
+                        du::AbstractArray{T},
+                        Δx::Number) where T<: Number
         u_next = similar(u)
         eulerStep!(u_next,u,du,Δx)
         return u_next
@@ -26,16 +26,16 @@ module NumInt
 
     function eulerSolve(systemFunc::Function,
                         p,
-                        u_0::AbstractArray{Number},
-                        Δt::AbstractArray{Number})
+                        u_0::AbstractArray{T},
+                        Δt::AbstractArray{T}) where T<: Number
         # Assert time steps and initial condition are vector like
         @assert ndims(Δt) == 1
         @assert ndims(u_0) == 1
         # Initialize values
-        u = Array{Float64,2}(undef,length(u_0),length(Δt)+1)
+        u = similar(u_0,length(u_0),length(Δt)+1)
         u[:,1] = u_0
         du = similar(u)
-        t = similar(undef,length(Δt)+1)
+        t = similar(Δt,length(Δt)+1)
         t[1] = 0.0
         i::Int = 1
         for Δ in Δt

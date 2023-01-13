@@ -21,6 +21,9 @@ module ODESystems
         # stateVarNames::Dict
     end
 
+    # TODO Create a system solution struct?
+    # enables creating plot methods, compare methods
+
     # TODO: check if this is actually creating performance gains
     function generateCopyDynamics(system::DynamicalSystem)::Function
         function dynamics(du,u,p,t)
@@ -43,9 +46,9 @@ module ODESystems
     end
 
     function solveEuler(system::DynamicalSystem,
-                        u0::AbstractArray{Number},
-                        Δt::AbstractArray{Number})        
-        return eulerSolve(system.dynamics!,system.p,u0,Δt)
+                        u0::AbstractArray{T},
+                        Δt::AbstractArray{T}) where T<:Number        
+        return NumInt.eulerSolve(system.dynamics!,system.p,u0,Δt)
     end
 
     function solveRK4()
@@ -141,7 +144,7 @@ module ODESystems
     function twoPopRSC!(du,u,p,t)
         s,r = u
         # Properly unpack parameters: https://stackoverflow.com/questions/44298860/julia-best-practice-to-unpack-parameters-inside-a-function
-        #@unpack ρ,m,K,α,β,C_t = p
+        @unpack ρ,m,K,α,β,C_t = p
 
         # Sensitive cells dynamics
         du[1] = s′ = ρ*s*(1-((s+m*r)/K)) - α*C_t(t)*s
@@ -149,7 +152,7 @@ module ODESystems
         du[2] = r′ = ρ*r*(1-((s+m*r)/K)) - β*r*s/K
     end
 
-#=     """
+    """
         constfunc_generator(c::Number)
     Generator to build one dimensionnal constant scalar function.
 
@@ -163,7 +166,7 @@ module ODESystems
 
     Can be used to easily solve a system containing a control term in a null control situation.
     """
-    nullfunc(t::Number) = 0.0 =#
+    nullfunc(t::Number) = 0.0
 
 
 end
