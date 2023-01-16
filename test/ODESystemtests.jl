@@ -29,8 +29,12 @@ end
 
     system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!)
     sol = ODESystems.solveEuler(system,[5e4,10],Δts) 
-    println(sol)
+    #println(sol)
     @test 1 == 1
+
+    sol = ODESystems.solve_diffeq(system,[5e4,10],Δts) 
+    #println(sol)
+    println(transpose(reduce(hcat,sol.u)))
 end
 
 @testset "ODEsystems JuMP control solving" begin

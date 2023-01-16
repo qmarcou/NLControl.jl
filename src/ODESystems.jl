@@ -35,13 +35,13 @@ module ODESystems
     end
 
     function solve_diffeq(system::DynamicalSystem,
-                            u0::AbstractArray{Number},
-                            Δt::AbstractArray{Number};
-                            kwargs...)
+                            u0::AbstractArray{T},
+                            Δt::AbstractArray{T};
+                            kwargs...) where T<:Number
         tspan = (0.0,sum(Δt))
         savetimes = append!([0.0],cumsum(Δt))
         ode = DifferentialEquations.ODEProblem(system.dynamics!,u0,tspan,system.p)
-        solution = ode.solve(prob; kwargs..., saveat=savetimes)
+        solution = DifferentialEquations.solve(ode; kwargs..., saveat=savetimes)
         return solution
     end
 
