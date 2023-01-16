@@ -24,7 +24,7 @@ module NumInt
         return u_next
     end
 
-    function eulerSolve(systemFunc::Function,
+    function eulerSolve(systemFunc!::Function,
                         p,
                         u_0::AbstractArray{T},
                         Δt::AbstractArray{T}) where T<: Number
@@ -39,8 +39,8 @@ module NumInt
         t[1] = 0.0
         i::Int = 1
         for Δ in Δt
-            systemFunc(du[:,i],u[:,i],p,t[i])
-            eulerStep!(u[:,i+1],u[:,i],du[:,i],Δ)
+            systemFunc!(view(du,:,i),view(u,:,i),p,t[i])
+            eulerStep!(view(u,:,i+1),view(u,:,i),view(du,:,i),Δ)
             t[i+1]=t[i]+Δ
             i+=1
         end
