@@ -12,17 +12,50 @@ module ODESystems
     using Ipopt
 
     """
+    An object storing information to build a 1D piecewise constant function.
+    """
+    struct StepFunc1DData
+        cutpoints::AbstractArray
+        values::AbstractArray
+        function StepFunc1DData(cutpoints,values)
+            if ndims(values)!=1 | ndims(cutpoints)!=1
+                error("Only 1D stepfunctions supported.")
+            elseif length(cutpoints) != length(values)-1
+                error("Mismatched size values and cutpoints arrays.")
+            elseif sort(cutpoints)!=cutpoints
+                error("Cutpoints must be sorted")
+            else
+                new(cutpoints,values)
+            end
+        end
+    end
+
+#=     function StepFuncData(value,ncuts::Integer)
+        
+    end
+
+    function StepFuncData()
+        
+    end =#
+
+    function stepFuncVal(StepFunc1DData, x)
+        index = findfirst(StepFunc1DData.cutpoints.>x)
+        if isnothing(index)
+            return last(StepFunc1DData.values)
+        else
+            return StepFunc1DData.values[index]
+        end
+    end
+
+    """
     Wrapper class to interface tools from JuMP and SciML.
     """
     struct DynamicalSystem
-        p::NamedTuple
+        p::Dict{Symbol,Any}
         # C_t::Function{t::Number}
         dynamics!::Function # f!(du,u,p,t) -> du
         # stateVarNames::Dict
     end
-
-    # TODO Create a system solution struct?
-    # enables creating plot methods, compare methods
 
     # TODO: check if this is actually creating performance gains
     function generateCopyDynamics(system::DynamicalSystem)::Function
@@ -40,7 +73,7 @@ module ODESystems
                             kwargs...) where T<:Number
         tspan = (0.0,sum(Δt))
         savetimes = append!([0.0],cumsum(Δt))
-        ode = DifferentialEquations.ODEProblem(system.dynamics!,u0,tspan,system.p)
+        ode = DifferentialEquations.ODEProblem(system.dynamics!,u0,tspan,NamedTuple(system.p))
         solution = DifferentialEquations.solve(ode; kwargs..., saveat=savetimes)
         return solution
     end
@@ -60,7 +93,10 @@ module ODESystems
     Create a base JuMP model based on the provided dynamical system.
     The returned model object only contains dynamics and starting solutions
     """
-    function createJuMPNLControlModel(system::DynamicalSystem, Δt, u0,solver=Ipopt.Optimizer)
+    function createJuMPNLControlModel(system::DynamicalSystem,
+         Δt,
+         u0,
+         solver=Ipopt.Optimizer)
         # Using user defined functions:
         # check https://jump.dev/JuMP.jl/stable/tutorials/nonlinear/tips_and_tricks/#User-defined-functions-with-vector-outputs
         # https://jump.dev/JuMP.jl/stable/manual/nlp/#User-defined-Functions
@@ -168,5 +204,21 @@ module ODESystems
     """
     nullfunc(t::Number) = 0.0
 
+    struct DSSolution
+        u::AbstractArray#{T} where T<:Number
+        du::AbstractArray#{T2} where T2<:Number
+        t::AbstractArray#{T3} where T3<:Number
+        p::NamedTuple
+        #dynamicsFuncName::string
+    end
+
+    function DSSolution(solution::DifferentialEquations.ODESolution)::DSSolution
+        # TODO
+    end 
+
+    # TODO create plot methods, compare functions
 
 end
+
+
+
