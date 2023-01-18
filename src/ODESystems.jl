@@ -17,13 +17,14 @@ module ODESystems
     struct StepFunc1DData
         cutpoints::AbstractArray
         values::AbstractArray
+        #TODO add bounds on function space
         function StepFunc1DData(cutpoints,values)
             if ndims(values)!=1 | ndims(cutpoints)!=1
                 error("Only 1D stepfunctions supported.")
             elseif length(cutpoints) != length(values)-1
                 error("Mismatched size values and cutpoints arrays.")
-            elseif sort(cutpoints)!=cutpoints
-                error("Cutpoints must be sorted")
+            elseif (sort(cutpoints)!=cutpoints) | (unique(cutpoints)!=cutpoints)
+                error("Cutpoints must be sorted and unique.")
             else
                 new(cutpoints,values)
             end
@@ -184,29 +185,13 @@ module ODESystems
     function twoPopRSC!(du,u,p,t)
         s,r = u
         # Properly unpack parameters: https://stackoverflow.com/questions/44298860/julia-best-practice-to-unpack-parameters-inside-a-function
-        @unpack ρ,m,K,α,β,C_t = p
+        @unpack ρ,m,K,α,β,C_data = p
 
         # Sensitive cells dynamics
-        du[1] = s′ = ρ*s*(1-((s+m*r)/K)) - α*C_t(t)*s
+        du[1] = s′ = ρ*s*(1-((s+m*r)/K)) - α*stepFuncVal(C_data,t)*s
         # Resistant cells dynamics
         du[2] = r′ = ρ*r*(1-((s+m*r)/K)) - β*r*s/K
     end
-
-    """
-        constfunc_generator(c::Number)
-    Generator to build one dimensionnal constant scalar function.
-
-    Return a function object returning ``c`` for any passed value ``t``
-    """
-    constfunc_generator(c::Number) = (t::Number->c)
-
-    """
-        null_func(t::Number)
-    Dummy function for a null control over any time ``t``.
-
-    Can be used to easily solve a system containing a control term in a null control situation.
-    """
-    nullfunc(t::Number) = 0.0
 
     struct DSSolution
         u::AbstractArray#{T} where T<:Number

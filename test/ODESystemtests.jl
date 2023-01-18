@@ -8,6 +8,7 @@ using tumor_control: ODESystems
     @test_throws "Mismatched" ODESystems.StepFunc1DData([0.0,1.0,2.0],[0.0,1.0,2.0])
     @test_throws "Only 1D" ODESystems.StepFunc1DData(zeros(2,2),zeros(3,2))
     @test_throws "sorted" ODESystems.StepFunc1DData([3.5,1.0],[0.0, 0.0, 0.0])
+    @test_throws "unique" ODESystems.StepFunc1DData([1.0,1.0],[0.0, 0.0, 0.0])
 
     # Test basic functionnality
     stepdata = ODESystems.StepFunc1DData([1.0,2.0],[0.0,1.0,2.0])
@@ -31,7 +32,7 @@ end
             (:α,0.01),
             (:β,0.1),
             (:C_max,5),
-            (:C_t,ODESystems.nullfunc)])
+            (:C_data,ODESystems.StepFunc1DData(0.0))])
 
     system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!)
 
@@ -45,7 +46,7 @@ end
             (:α,0.01),
             (:β,0.1),
             (:C_max,5),
-            (:C_t,ODESystems.nullfunc)])
+            (:C_data,ODESystems.StepFunc1DData(0.0))])
 
     n_steps = 10
     Δts = repeat([.1],10)
@@ -56,7 +57,7 @@ end
 
     sol = ODESystems.solve_diffeq(system,[5e4,10],Δts) 
     #println(sol)
-    println(transpose(reduce(hcat,sol.u)))
+    #println(transpose(reduce(hcat,sol.u)))
 end
 
 @testset "ODEsystems JuMP control solving" begin
