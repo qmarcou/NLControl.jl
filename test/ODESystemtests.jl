@@ -4,16 +4,22 @@ using Revise
 using tumor_control: ODESystems
 
 @testset "StepFunction construction and use" begin
+    # Test inner constructor
     @test_throws "Mismatched" ODESystems.StepFunc1DData([0.0,1.0,2.0],[0.0,1.0,2.0])
     @test_throws "Only 1D" ODESystems.StepFunc1DData(zeros(2,2),zeros(3,2))
     @test_throws "sorted" ODESystems.StepFunc1DData([3.5,1.0],[0.0, 0.0, 0.0])
 
+    # Test basic functionnality
     stepdata = ODESystems.StepFunc1DData([1.0,2.0],[0.0,1.0,2.0])
-
     @test ODESystems.stepFuncVal(stepdata,-5) == 0.0
     @test ODESystems.stepFuncVal(stepdata,1.0) == 1.0
     @test ODESystems.stepFuncVal(stepdata,1.5) == 1.0
     @test ODESystems.stepFuncVal(stepdata,2.5) == 2.0
+
+    # Test outer constructors
+    stepdata = ODESystems.StepFunc1DData(5.0)
+    @test ODESystems.stepFuncVal(stepdata,-5) == 5.0
+    @test ODESystems.stepFuncVal(stepdata,5) == 5.0
 
 end
 

@@ -30,6 +30,10 @@ module ODESystems
         end
     end
 
+    function StepFunc1DData(value)
+        return StepFunc1DData(zeros(0),[value])
+    end
+
 #=     function StepFuncData(value,ncuts::Integer)
         
     end
