@@ -34,7 +34,7 @@ end
             (:C_max,5),
             (:C_data,ODESystems.StepFunc1DData(0.0))])
 
-    system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!)
+    system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!,2)
 
 end
 
@@ -51,7 +51,7 @@ end
     n_steps = 10
     Δts = repeat([.1],10)
 
-    system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!)
+    system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!, 2)
     sol = ODESystems.solveEuler(system,[5e4,10],Δts) 
     #println(sol)
 
@@ -60,17 +60,28 @@ end
     #println(transpose(reduce(hcat,sol.u)))
 end
 
-@testset "ODEsystems JuMP control solving" begin
-    p = (ρ=.035,
-    m=30,
-    K=4.8e6,
-    α=0.01,
-    β=0.1,
-    C_t=ODESystems.nullfunc)
+@testset "ODEsystems JuMP control variable creation" begin
+    using JuMP
+    jumpMod = Model()
+    control_data = ODESystems.createJuMPControlVariable!(jumpMod,
+                                                         :C_t)
+    println(control_data)
+    show(jumpMod)
+    # TODO make more rigorous testing with different situations
+end
 
-    system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!)
+@testset "ODEsystems JuMP initialization and solving" begin
+    p = Dict([(:ρ,.035),
+    (:m,30),
+    (:K,4.8e6),
+    (:α,0.01),
+    (:β,0.1),
+    (:C_max,5),
+    (:C_data,control_data)])
 
-    n_steps = 10
+    system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!, 2)
+
+    #= n_steps = 10
     Δts = repeat([.1],10)
-    jumpMod = ODESystems.createJuMPNLControlModel(system, Δts, [5e4,10])
+    jumpMod = ODESystems.createJuMPNLControlModel(system, Δts, [5e4,10]) =#
 end
