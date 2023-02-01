@@ -11,17 +11,21 @@ module NumInt
     #using JuMP
 
     #function eulerStep!(u_next::Array{float64},u::Array{float64},du::Array{float64},Δx::Array{float64})
-    function eulerStep!(u_next::AbstractArray{T},
-                        u::AbstractArray{T},
-                        du::AbstractArray{T},
+    function eulerStep!(u_next::Union{T,AbstractArray{T}},
+                        u::Union{T,AbstractArray{T}},
+                        du::Union{T,AbstractArray{T}},
                         Δx::Number) where T<: Union{Number,AbstractJuMPScalar}
         u_next .= u.+Δx.*du
     end
 
-    function eulerStep(u::AbstractArray{T},
-                        du::AbstractArray{T},
+    function eulerStep(u::Union{T,AbstractArray{T}},
+                        du::Union{T,AbstractArray{T}},
                         Δx::Number) where T<: Union{Number,AbstractJuMPScalar}
-        u_next = similar(u)
+        if isa(u,AbstractArray)
+            u_next = similar(u)
+        else
+            u_next = nothing
+        end
         eulerStep!(u_next,u,du,Δx)
         return u_next
     end
