@@ -2,6 +2,8 @@ using DrWatson, Test
 @quickactivate "tumor_control"
 using Revise
 using tumor_control: ODESystems
+using JuMP
+using Ipopt
 
 @testset "StepFunction construction and use" begin
     # Test inner constructor
@@ -71,6 +73,11 @@ end
 end
 
 @testset "ODEsystems JuMP initialization and solving" begin
+
+    jumpMod = Model(Ipopt.Optimizer)
+    control_data = ODESystems.createJuMPControlVariable!(jumpMod,
+                                                         :C_t,
+                                                         upper_bound=5)
     p = Dict([(:ρ,.035),
     (:m,30),
     (:K,4.8e6),
@@ -81,7 +88,15 @@ end
 
     system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!, 2)
 
-    #= n_steps = 10
+    n_steps = 10
     Δts = repeat([.1],10)
-    jumpMod = ODESystems.createJuMPNLControlModel(system, Δts, [5e4,10]) =#
+    jumpMod,u,du,t = ODESystems.addJuMPNLDynamics!(jumpMod,system, Δts, [5e4,10],[:C_data])
+    @objective(jumpMod,Min,sum(u[:,end]))
+    show(jumpMod)
+    println()
+    optimize!(jumpMod)
+    println(value.(jumpMod[:C_t]))
+    println(value.(jumpMod[:u]))
+    println(start_value.(jumpMod[:C_t]))
+    println(start_value.(jumpMod[:u]))
 end

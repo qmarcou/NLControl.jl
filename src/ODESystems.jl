@@ -8,7 +8,7 @@ module ODESystems
     using DifferentialEquations
     using ..tumor_control: NumInt
     import JuMP
-    using JuMP: Model,@variable,@variables,fix,@NLexpressions,@NLconstraint
+    using JuMP: Model,@variable,@variables,fix,@NLexpressions,@NLconstraint,add_nonlinear_expression,NonlinearExpression,start_value,register
     using Ipopt
 
     """
@@ -59,6 +59,7 @@ module ODESystems
         p::Dict{Symbol,Any}
         dynamics!::Function # f!(du,u,p,t) -> du
         ndims::Int64 # Number of u dimensions
+        # constraints
         # stateVarNames::Dict
         function DynamicalSystem(p,dynamics!,ndims)
             if ndims<=0
@@ -72,16 +73,30 @@ module ODESystems
 
     # TODO: check if this is actually creating performance gains
     function generateCopyDynamics(system::DynamicalSystem)::Function
-        function dynamics(du,u,p,t)
+        function dynamics(u,p,t)
             du = similar(u)
-            system.dynamics(du,u,p,t)
+            system.dynamics!(du,u,p,t)
             return du
         end
         return dynamics
     end
 
-    function generateSplattedScalarOutputCopyDynamics(system::DynamicalSystem)::Function
-        nothing
+    function generateSplattedCopyDynamics(system::DynamicalSystem,
+        controlVarNames::AbstractArray{<:Union{String,Symbol}})::Function
+        dynamics = generateCopyDynamics(system)
+        if length(controlVarNames)!=1
+            error("Handling of multiple control variables is not implemented yet.")
+        end
+        ndims = system.ndims
+        p_copy = copy(system.p)
+        function splattedDynamics(t,x...)
+            # assign current control value to p_copy (need to convert to array using collect, x being a tuple)
+            p_copy[controlVarNames[1]] = StepFunc1DData(p_copy[controlVarNames[1]].cutpoints,collect(x[ndims+1:end]))
+            return dynamics(collect(x[1:ndims]), # u
+                    p_copy, # p with updated control term
+                    t)
+        end
+        return splattedDynamics
     end
 
     function solve_diffeq(system::DynamicalSystem,
@@ -105,62 +120,137 @@ module ODESystems
     #TODO: implement RK4
     end
 
-#=     """
+    """
+    memoize(func::Function, n_outputs::Int)
+
+    Take a function `func` and return a vector of length `n_outputs`, where element
+    `i` is a function that returns the equivalent of `func(x...)[i]`.
+
+    To avoid duplication of work, cache the most-recent evaluations of `func`.
+    Because `func_i` is auto-differentiated with ForwardDiff, our cache needs to
+    work when `x` is a `Float64` and a `ForwardDiff.Dual`.
+    """
+#=     function memoizeDynamics(splattedDyn::Function, n_outputs::Int)
+        last_x, last_f, last_t = nothing, nothing, nothing
+        last_dx, last_dfdx, last_dt = nothing, nothing, nothing
+        function splattedDyn_i(i,p,t,x::T...) where {T<:Real}
+            if T == Float64
+                if (x != last_x) || (t != last_t)
+                    last_x, last_f, last_t = x, splattedDyn(x...), t
+                end
+                return last_f[i]::T
+            else
+                if (x != last_dx) || (t != last_dt) || (!isa(last_dfdx,T)) 
+                    # the last check seems necessary to prevent Forward diff from crashing
+                    last_dx, last_dfdx, last_dt = x, splattedDyn(x...), t
+                end
+                return last_dfdx[i]::T
+            end
+        end
+        return [(p,t,x...) -> splattedDyn_i(i,p,t,x...) for i in 1:n_outputs]
+    end =#
+    function memoize(func::Function, n_outputs::Int)
+        last_x, last_f = nothing, nothing
+        last_dx, last_dfdx = nothing, nothing
+        function func_i(i,x::T...) where {T<:Real}
+            if T == Float64
+                if (x != last_x)
+                    last_x, last_f = x, func(x...)
+                end
+                return last_f[i]::T
+            else
+                if (x != last_dx) || (!isa(last_dfdx,T)) 
+                    # the last check seems necessary to prevent Forward diff from crashing
+                    last_dx, last_dfdx = x, func(x...)
+                end
+                return last_dfdx[i]::T
+            end
+        end
+        return [(x...) -> func_i(i,x...) for i in 1:n_outputs]
+    end
+
+
+    """
 
     Create a base JuMP model based on the provided dynamical system.
     The returned model object only contains dynamics and starting solutions
     """
-    function addJuMPNLDynamics(model::Model,
+    function addJuMPNLDynamics!(model::Model,
         system::DynamicalSystem,
         Δt,
         u0,
-        controlVarNames::AbstractArray{Union{String,Symbol}})
-        # Using user defined functions:
-        # check https://jump.dev/JuMP.jl/stable/tutorials/nonlinear/tips_and_tricks/#User-defined-functions-with-vector-outputs
-        # https://jump.dev/JuMP.jl/stable/manual/nlp/#User-defined-Functions
+        controlVarNames::AbstractArray{<:Union{String,Symbol}})
 
         # Get array sizes
-        n_rows=length(u0)
-        n_cols = length(Δt) + 1 
+        n_rows = system.ndims
+        n_cols = length(Δt) + 1
+        
+        @assert length(u0) == n_rows
 
         # Make a working copy of the parameters Dict
         p_copy = copy(system.p)
 
+        # Extract starting values from JuMP control variables
+        if length(controlVarNames)>1
+            error("Handling of multiple control variables is not implemented yet.")
+        end
         for var in controlVarNames
+            if isa(var,String)
+                # DynamicalSystem.p is a Dict{Symbol,Any}
+                var = Symbol(var)
+            end
             symbolic_val = p_copy[var]
             p_copy[var] = StepFunc1DData(symbolic_val.cutpoints,start_value.(symbolic_val.values))
         end
 
         # Make a copy of the system containing the parameters copy
-        system_copy = DynamicalSystem(p_copy,system.dynamics!)
+        system_copy = DynamicalSystem(p_copy,system.dynamics!,system.ndims)
 
-        # Compute initializing solution using the previously provided control starting values
-        u_init = solveEuler(system_copy,u0,Δt)
+        # Compute an initializing solution using the control starting values
+        u_init = solveEuler(system_copy,u0,Δt).u
 
-        # Initialize it 
+        # Create the variables and initialize them 
         @variables(model,begin
-            u[i=1:n_rows,j=1:n_cols] ≥ 0, (start=u_init[i,j])
-            t[i=1:n_cols] ≥ 0 # create a time vector variable 
+            u[i=1:n_rows,j=1:n_cols], (start=u_init[i,j])
+            t[j=1:n_cols] # create a time vector variable 
         end)
         
-        # Create a fixed time variable
-        fix(t[i=1:n], append!([0.0],cumsum(Δt))[i])
+        # Fix the vector time variable
+        tmp_t = append!([0.0],cumsum(Δt))
+        for j in 1:n_cols
+            fix(t[j], tmp_t[j])
+        end
+
         # Fix initial state to u0
-        fix(u[0,:], u0; force = true)
+        for i in 1:n_rows
+            fix(u[i,1], u0[i]; force = true) 
+        end
 
-        # Create an expression containing the dynamics 
-        # TODO: check that this works using an RK4 integration
-        copydyn = generateCopyDynamics(system)
-        @NLexpressions(model,begin
-            # du/dt
-            du[j = 1:n_cols], copydyn(u[j],system.p,t[j])
-        end)
+        # Create a Matrix of NLexpression containing the dynamics 
+        # We have both vector input and vector output functionsthat we have to circumvent
+        # Vector input: https://jump.dev/JuMP.jl/stable/manual/nlp/#User-defined-functions-with-vector-inputs
+        # Vector output: https://jump.dev/JuMP.jl/stable/manual/nlp/#More-complicated-examples
+        splattedDyn = generateSplattedCopyDynamics(system,controlVarNames)
+        memoizedDyn = memoize(splattedDyn, system.ndims)
+        du_binding = Matrix{NonlinearExpression}(undef,n_rows,n_cols)
+        for i in 1:system.ndims 
+            register(model, Symbol("du_"*string(i)),
+             1+system.ndims+length(system.p[controlVarNames[1]].values), # time + system + control variables dimensions
+              memoizedDyn[i]; autodiff = true)
+            for j in 1:n_cols
+                expr = :($(Symbol("du_"*string(i)))($(t[j]),$(u[:,j])...,$(system.p[controlVarNames[1]].values)...))
+                du_binding[i,j] = add_nonlinear_expression(model,expr)
+            end
+        end
+        # register the matrix as a variable in the model
+        model[:du] = du_binding
 
-        # Add the dynamics constraint based on the integration scheme
-        @NLconstraint(model, [j=2:n], u[j] == eulerStep(u[j - 1], du[j - 1], Δt[j-1]))
+        # Finally add the integration constraint using the expression of the dynamics
+        register(model,:eulerStep,3,NumInt.eulerStep,autodiff=true)
+        @NLconstraint(model, numint[i=1:n_rows,j=2:n_cols], u[i,j] == eulerStep(u[i,j - 1], du_binding[i,j - 1], t[j]-t[j-1]))
 
-        return model
-    end =#
+        return (model,u,du_binding,t)
+    end
 
     """
     The control term should be more coarse grained than the time step used for solving.
@@ -188,9 +278,9 @@ module ODESystems
         end
 
         # Check that the variable name is not alreay registered
-#=         if haskey(model, varname_sym)
-            error("Variable already exists in the model").
-        end =#
+        if haskey(model, varname_sym)
+            error("Variable '"*varname_str*"' already exists in the model.")
+        end
 
         # Create the corresponding JuMP variable
         # The macro only takes a directly typed expression, so I cannot use eval(varname_sym)

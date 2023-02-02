@@ -8,26 +8,27 @@ to build constraints on dynamics for JuMP models.
 module NumInt
     export eulerSolve
     import JuMP: AbstractJuMPScalar, GenericQuadExpr
-    #using JuMP
 
     #function eulerStep!(u_next::Array{float64},u::Array{float64},du::Array{float64},Δx::Array{float64})
     function eulerStep!(u_next::Union{T,AbstractArray{T}},
                         u::Union{T,AbstractArray{T}},
                         du::Union{T,AbstractArray{T}},
                         Δx::Number) where T<: Union{Number,AbstractJuMPScalar}
-        u_next .= u.+Δx.*du
+        if ndims(u)==0
+            u_next = u+Δx*du
+        else
+            u_next .= u.+Δx.*du
+        end
     end
 
     function eulerStep(u::Union{T,AbstractArray{T}},
                         du::Union{T,AbstractArray{T}},
                         Δx::Number) where T<: Union{Number,AbstractJuMPScalar}
-        if isa(u,AbstractArray)
-            u_next = similar(u)
+        if ndims(u)==0
+            return u+Δx*du
         else
-            u_next = nothing
+            return u.+Δx.*du
         end
-        eulerStep!(u_next,u,du,Δx)
-        return u_next
     end
 
     function eulerSolve(systemFunc!::Function,
