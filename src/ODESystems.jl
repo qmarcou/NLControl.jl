@@ -44,12 +44,10 @@ module ODESystems
     end =#
 
     function stepFuncVal(StepFunc1DData, x)
-        index = findfirst(StepFunc1DData.cutpoints.>x)
-        if isnothing(index)
-            return last(StepFunc1DData.values)
-        else
-            return StepFunc1DData.values[index]
-        end
+        index = searchsortedfirst(StepFunc1DData.cutpoints,x,lt=(x,y)->x<=y)
+        #index = min(index,length(StepFunc1DData.cutpoints)) # not needed cutpoints are already shorter by 1
+        index = max(index,1)
+        return StepFunc1DData.values[index]
     end
 
     """
@@ -159,7 +157,7 @@ module ODESystems
                 end
                 return last_f[i]::T
             else
-                if (x != last_dx) || (!isa(last_dfdx,T)) 
+                if (x != last_dx) || (!isa(last_dfdx,T))
                     # the last check seems necessary to prevent Forward diff from crashing
                     last_dx, last_dfdx = x, func(x...)
                 end
