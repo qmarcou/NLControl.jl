@@ -29,10 +29,10 @@ module ODESystems
                 new(cutpoints,values)
             end
         end
-    end
+        function StepFunc1DData(value)
+            return StepFunc1DData(zeros(0),[value])
+        end
 
-    function StepFunc1DData(value)
-        return StepFunc1DData(zeros(0),[value])
     end
 
 #=     function StepFuncData(value,ncuts::Integer)
@@ -89,8 +89,10 @@ module ODESystems
         p_copy = copy(system.p)
         function splattedDynamics(t,x...)
             # assign current control value to p_copy (need to convert to array using collect, x being a tuple)
-            p_copy[controlVarNames[1]] = StepFunc1DData(p_copy[controlVarNames[1]].cutpoints,collect(x[ndims+1:end]))
-            return dynamics(collect(x[1:ndims]), # u
+            x_arr = collect(x)
+            # TODO Generalize this to enable use of several controls
+            p_copy[controlVarNames[1]] = StepFunc1DData(x_arr[end])
+            return dynamics(x_arr[1:ndims], # u
                     p_copy, # p with updated control term
                     t)
         end
@@ -128,25 +130,6 @@ module ODESystems
     Because `func_i` is auto-differentiated with ForwardDiff, our cache needs to
     work when `x` is a `Float64` and a `ForwardDiff.Dual`.
     """
-#=     function memoizeDynamics(splattedDyn::Function, n_outputs::Int)
-        last_x, last_f, last_t = nothing, nothing, nothing
-        last_dx, last_dfdx, last_dt = nothing, nothing, nothing
-        function splattedDyn_i(i,p,t,x::T...) where {T<:Real}
-            if T == Float64
-                if (x != last_x) || (t != last_t)
-                    last_x, last_f, last_t = x, splattedDyn(x...), t
-                end
-                return last_f[i]::T
-            else
-                if (x != last_dx) || (t != last_dt) || (!isa(last_dfdx,T)) 
-                    # the last check seems necessary to prevent Forward diff from crashing
-                    last_dx, last_dfdx, last_dt = x, splattedDyn(x...), t
-                end
-                return last_dfdx[i]::T
-            end
-        end
-        return [(p,t,x...) -> splattedDyn_i(i,p,t,x...) for i in 1:n_outputs]
-    end =#
     function memoize(func::Function, n_outputs::Int)
         last_x, last_f = nothing, nothing
         last_dx, last_dfdx = nothing, nothing
@@ -157,7 +140,7 @@ module ODESystems
                 end
                 return last_f[i]::T
             else
-                if (x != last_dx) || (!isa(last_dfdx,T))
+                if (x != last_dx) #|| (!isa(last_dfdx,T))
                     # the last check seems necessary to prevent Forward diff from crashing
                     last_dx, last_dfdx = x, func(x...)
                 end
@@ -210,14 +193,10 @@ module ODESystems
         # Create the variables and initialize them 
         @variables(model,begin
             u[i=1:n_rows,j=1:n_cols], (start=u_init[i,j])
-            t[j=1:n_cols] # create a time vector variable 
         end)
         
         # Fix the vector time variable
-        tmp_t = append!([0.0],cumsum(Δt))
-        for j in 1:n_cols
-            fix(t[j], tmp_t[j])
-        end
+        t = append!([0.0],cumsum(Δt))
 
         # Fix initial state to u0
         for i in 1:n_rows
@@ -233,10 +212,15 @@ module ODESystems
         du_binding = Matrix{NonlinearExpression}(undef,n_rows,n_cols)
         for i in 1:system.ndims 
             register(model, Symbol("du_"*string(i)),
-             1+system.ndims+length(system.p[controlVarNames[1]].values), # time + system + control variables dimensions
+             1+system.ndims+1, # time + system + control variables dimensions
               memoizedDyn[i]; autodiff = true)
             for j in 1:n_cols
-                expr = :($(Symbol("du_"*string(i)))($(t[j]),$(u[:,j])...,$(system.p[controlVarNames[1]].values)...))
+                #= Performance PATCH
+                Extract the Control values/Abstract Ref for a given time point and only feed this value to the expression.
+                Though this is  bit of a loss of generality, it allows not to pass all control variables.
+                This saves a lot of useless ForwardDiff computation since all derivatives would have been 0 except 1.
+                =#
+                expr = :($(Symbol("du_"*string(i)))($(t[j]),$(u[:,j])...,$(stepFuncVal(system.p[controlVarNames[1]],t[j]))))
                 du_binding[i,j] = add_nonlinear_expression(model,expr)
             end
         end
@@ -345,9 +329,9 @@ module ODESystems
         @unpack ρ,m,K,α,β,C_data = p
 
         # Sensitive cells dynamics
-        du[1] = s′ = ρ*s*(1-((s+m*r)/K)) - α*stepFuncVal(C_data,t)*s
+        du[1] = ρ*s*(1-((s+m*r)/K)) - α*stepFuncVal(C_data,t)*s
         # Resistant cells dynamics
-        du[2] = r′ = ρ*r*(1-((s+m*r)/K)) - β*r*s/K
+        du[2] = ρ*r*(1-((s+m*r)/K)) - β*r*s/K
     end
 
     struct DSSolution

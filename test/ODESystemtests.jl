@@ -89,14 +89,11 @@ end
     system = ODESystems.DynamicalSystem(p, ODESystems.twoPopRSC!, 2)
 
     n_steps = 10
-    Δts = repeat([.1],10)
+    Δts = repeat([.1],100)
     jumpMod,u,du,t = ODESystems.addJuMPNLDynamics!(jumpMod,system, Δts, [5e4,10],[:C_data])
-    @objective(jumpMod,Min,sum(u[:,end]))
-    show(jumpMod)
-    println()
+    @objective(jumpMod,Min,sum(u[:,end].^2))
+    #show(jumpMod)
+    #println()
+    #@profview optimize!(jumpMod)
     optimize!(jumpMod)
-    println(value.(jumpMod[:C_t]))
-    println(value.(jumpMod[:u]))
-    println(start_value.(jumpMod[:C_t]))
-    println(start_value.(jumpMod[:u]))
 end
