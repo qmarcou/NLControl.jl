@@ -4,6 +4,7 @@ authors = ["qmarcou"]
 [deps]
 Alpine = "07493b3f-dabb-5b16-a503-4139292d7dd4"
 Clustering = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DiffEqBayes = "ebbdde9d-f333-5424-9be2-dbf1e9acfb5e"
 DiffEqParamEstim = "1130ab10-4a5a-5621-a13d-e4788d82bd4c"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
