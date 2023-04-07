@@ -105,6 +105,11 @@ module ODESystems
                             kwargs...) where T<:Number
         tspan = (0.0,sum(Δt))
         savetimes = append!([0.0],cumsum(Δt))
+        # Bugfix: cumsum and sum may end up with different values for the last
+        # savetime due to successive floating point rounding errors. Enforce
+        # the same value to avoid truncation of the solution.
+        savetimes[end] = tspan[end]
+
         ode = DifferentialEquations.ODEProblem(system.dynamics!,u0,tspan,NamedTuple(system.p))
         solution = DifferentialEquations.solve(ode; kwargs..., saveat=savetimes)
         return solution
