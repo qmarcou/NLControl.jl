@@ -1,7 +1,4 @@
-using DrWatson, Test
-@quickactivate "tumor_control"
-using Revise
-using tumor_control: ODESystems
+using NLControl: ODESystems
 using JuMP
 using Ipopt
 

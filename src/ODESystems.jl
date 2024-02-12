@@ -6,7 +6,7 @@ module ODESystems
     # check this package out: https://juliapackages.com/p/parameterizedfunctions
     using UnPack
     using DifferentialEquations
-    using ..tumor_control: NumInt
+    using ..NLControl: NumInt
     import JuMP
     using JuMP: Model,@variable,@variables,fix,@NLexpressions,@NLconstraint,add_nonlinear_expression,NonlinearExpression,start_value,register
     using Ipopt
