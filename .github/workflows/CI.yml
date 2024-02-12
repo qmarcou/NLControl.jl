@@ -48,9 +48,9 @@ jobs:
           target_branch: 'gh-pages'
           commit_message_template: '[Automated] Merged {source_ref} into target {target_branch}'
       - uses: actions/upload-artifact@v2
-          with:
-            name: lcov
-            path: lcov.info
+        with:
+          name: lcov
+          path: lcov.info
         
   process_cov_info:
       runs-on: ubuntu-latest
