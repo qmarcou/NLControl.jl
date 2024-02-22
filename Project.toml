@@ -12,6 +12,7 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
 DifferentialEquations = "7"
+Ipopt = "1"
 JuMP = "1.0"
 Revise = "3"
 UnPack = "1"
